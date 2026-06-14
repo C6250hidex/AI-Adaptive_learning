@@ -1,16 +1,14 @@
-{
-  "development": {
-    "username": "postgres.gfjmbuiqglqvscsnvnul",
-    "password": "CHIdex20042605@",
-    "database": "postgres",
-    "host": "aws-0-eu-central-1.pooler.supabase.com",
-    "port": 6543,
-    "dialect": "postgres",
-    "dialectOptions": {
-      "ssl": {
-        "require": true,
-        "rejectUnauthorized": false
-      }
-    }
+"development": {
+  "use_env_variable": "DATABASE_URL",
+  "dialect": "postgres",
+  "dialectOptions": {
+    "ssl": { "require": true, "rejectUnauthorized": false }
+  }
+},
+"production": {
+  "use_env_variable": "DATABASE_URL",
+  "dialect": "postgres",
+  "dialectOptions": {
+    "ssl": { "require": true, "rejectUnauthorized": false }
   }
 }
