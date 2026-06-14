@@ -26,31 +26,29 @@ const Register = () => {
     e.preventDefault();
     setLoading(true);
 
-    // 1. Sanitize data (Crucial for Postgres/Supabase ENUMs)
+    // 1. Prepare data
     const payload = {
       username: formData.username.trim(),
       email: formData.email.toLowerCase().trim(),
       password: formData.password,
-      role: formData.role.toLowerCase(), // Ensure 'student' not 'Student'
+      role: formData.role.toLowerCase(),
     };
 
-    // 2. Create the promise WITHOUT 'await'
+    // 2. Pass the PENDING promise to toast.promise (NO AWAIT HERE)
     const registerPromise = API.post("/auth/register", payload);
 
-    // 3. Let toast.promise handle the resolution
     toast.promise(registerPromise, {
-      loading: "Committing academic profile to cloud database...",
+      loading: "Syncing with Render Cloud Database...",
       success: (res) => {
         setLoading(false);
         setTimeout(() => navigate("/login"), 2000);
-        return "Profile Created Successfully! Redirecting to login...";
+        return "Success! Academic profile indexed.";
       },
       error: (err) => {
         setLoading(false);
-        // This will now show the EXACT error from the server (e.g. "Username too long")
+        // This will now show the REAL error from Postgres (e.g. 'Email already in use')
         return (
-          err.response?.data?.message ||
-          "Registration failed. Please verify data."
+          err.response?.data?.message || "Verify your connection and data."
         );
       },
     });

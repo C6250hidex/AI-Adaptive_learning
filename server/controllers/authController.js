@@ -4,32 +4,29 @@ const { User } = require("../models");
 
 // 1. REGISTER: Provisioning new Academic Identities
 exports.register = async (req, res) => {
+  console.log("📥 Registration Attempt Received:", req.body); // Check Render logs for this!
+
   try {
     const { username, email, password, role } = req.body;
 
-    // 1. Force lowercase to match Postgres ENUM exactly
-    const sanitizedRole = role ? role.toLowerCase() : "student";
-    const sanitizedEmail = email ? email.toLowerCase().trim() : "";
+    // Postgres ENUM is case-sensitive. Ensure it is lowercase 'student' or 'teacher'
+    const finalRole = role ? role.toLowerCase() : "student";
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // 2. Log exactly what we are trying to save (this shows in Render logs)
-    console.log(
-      ` Attempting to register: ${sanitizedEmail} as ${sanitizedRole}`,
-    );
-
     const newUser = await User.create({
       username: username.trim(),
-      email: sanitizedEmail,
+      email: email.toLowerCase().trim(),
       password: hashedPassword,
-      role: sanitizedRole,
+      role: finalRole,
     });
 
-    res.status(201).json({ message: "Success" });
+    console.log("✅ User created successfully in Render Postgres");
+    res.status(201).json({ message: "Registration successful" });
   } catch (error) {
-    // 3. This log is CRITICAL. It will tell you exactly which field failed.
-    console.error("❌ REGISTRATION FAILURE:", error.message);
-    res.status(400).json({ message: error.message });
+    // This logs the SPECIFIC error (e.g., "Email already exists" or "Validation error")
+    console.error("❌ DATABASE ERROR:", error.name, "->", error.message);
+    res.status(400).json({ message: error.message || "Registration failed" });
   }
 };
 
