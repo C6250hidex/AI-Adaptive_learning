@@ -86,7 +86,7 @@ const PORT = process.env.PORT || 5000;
 sequelize
   .sync({ alter: true }) // 'alter: true' keeps MySQL in sync with your Model code changes
   .then(() => {
-    console.log("✅ MySQL Database Synchronized");
+    console.log("✅ Supabase Connected and Tables Created!");
     app.listen(PORT, () => {
       console.log(`🚀 ADAPTIVE AI SERVER ACTIVE: http://localhost:${PORT}`);
       console.log(`📊 Health Check: http://localhost:${PORT}/status`);
