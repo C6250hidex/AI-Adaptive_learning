@@ -22,31 +22,35 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // Inside handleSubmit in Register.jsx
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
-    // Professional touch: Clean the data before sending to MySQL
+    // 1. Sanitize data (Crucial for Postgres/Supabase ENUMs)
     const payload = {
-      ...formData,
-      email: formData.email.toLowerCase().trim(),
       username: formData.username.trim(),
+      email: formData.email.toLowerCase().trim(),
+      password: formData.password,
+      role: formData.role.toLowerCase(), // Ensure 'student' not 'Student'
     };
 
+    // 2. Create the promise WITHOUT 'await'
     const registerPromise = API.post("/auth/register", payload);
 
+    // 3. Let toast.promise handle the resolution
     toast.promise(registerPromise, {
-      loading: "Indexing academic profile in database...",
-      success: () => {
+      loading: "Committing academic profile to cloud database...",
+      success: (res) => {
         setLoading(false);
-        navigate("/login");
-        return "Profile Created. Welcome to the platform!";
+        setTimeout(() => navigate("/login"), 2000);
+        return "Profile Created Successfully! Redirecting to login...";
       },
       error: (err) => {
         setLoading(false);
+        // This will now show the EXACT error from the server (e.g. "Username too long")
         return (
-          err.response?.data?.message || "Registration failed. Check your data."
+          err.response?.data?.message ||
+          "Registration failed. Please verify data."
         );
       },
     });

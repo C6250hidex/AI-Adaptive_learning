@@ -12,7 +12,7 @@ module.exports = (sequelize, DataTypes) => {
         unique: true,
         allowNull: false,
         validate: {
-          len: [3, 50], // Professional constraint
+          len: [3, 100], // Professional constraint
         },
       },
       email: {
