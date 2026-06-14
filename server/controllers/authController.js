@@ -4,44 +4,35 @@ const { User } = require("../models");
 
 // 1. REGISTER: Provisioning new Academic Identities
 exports.register = async (req, res) => {
+  // ADD THIS LOG:
+  console.log("📥 Incoming Registration:", req.body);
+
   try {
     const { username, email, password, role } = req.body;
 
-    // PROFESSIONAL SANITIZATION: Clean the data before database entry
-    const cleanEmail = email.toLowerCase().trim();
-    const cleanUsername = username.trim();
+    // Loosen validation logic for the demo
+    const cleanEmail = email ? email.toLowerCase().trim() : null;
+    const finalRole =
+      role && role.toLowerCase() === "teacher" ? "teacher" : "student";
 
-    // SECURITY GUARD: Prevent unauthorized Admin elevation via public form
-    // Only 'student' and 'teacher' can register publicly.
-    const authorizedRoles = ["student", "teacher"];
-    const finalRole = authorizedRoles.includes(role) ? role : "student";
-
-    // DATABASE CHECK: Verify identity uniqueness
-    const existingUser = await User.findOne({ where: { email: cleanEmail } });
-    if (existingUser) {
-      return res
-        .status(400)
-        .json({ message: "Identity already exists in registry." });
+    if (!username || !cleanEmail || !password) {
+      return res.status(400).json({ message: "Missing required fields" });
     }
 
-    // ENCRYPTION: High-entropy password hashing
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // PERSISTENCE: Commit to MySQL
     const newUser = await User.create({
-      username: cleanUsername,
+      username: username.trim(),
       email: cleanEmail,
       password: hashedPassword,
       role: finalRole,
     });
 
-    console.log(`NEW USER REGISTERED: ${cleanUsername} as ${finalRole}`);
-    res.status(201).json({ message: "Academic profile created successfully." });
+    res.status(201).json({ message: "Account created successfully" });
   } catch (error) {
-    console.error("REGISTRATION ERROR:", error);
-    res
-      .status(500)
-      .json({ error: "Internal Database Error", details: error.message });
+    // ADD THIS LOG:
+    console.error("❌ DB Insert Error:", error);
+    res.status(500).json({ message: error.message || "Registration failed" });
   }
 };
 
