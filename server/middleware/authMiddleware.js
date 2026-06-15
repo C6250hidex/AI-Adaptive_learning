@@ -1,94 +1,59 @@
+// server/middleware/authMiddleware.js
 const jwt = require("jsonwebtoken");
 const { User } = require("../models");
 
-/**
- * 1. IDENTITY PROTECTION:
- * Decodes the JWT and verifies the user exists in the PostgreSQL Registry.
- */
 const protect = async (req, res, next) => {
   let token;
-
-  // Check for the Bearer token in the Authorization header
   if (
     req.headers.authorization &&
     req.headers.authorization.startsWith("Bearer")
   ) {
     try {
       token = req.headers.authorization.split(" ")[1];
-
-      // Decode the token using the system secret
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      /**
-       * DATABASE SYNC:
-       * We fetch the user from MySQL/Postgres to ensure the role is fresh.
-       * If an Admin demotes a Teacher, this check catches it immediately.
-       */
-      const userRecord = await User.findByPk(decoded.id, {
-        attributes: ["id", "role", "username", "email"], // Optimization: Fetch only needed fields
-      });
-
-      if (!userRecord) {
-        console.log(
-          "❌ Auth: Valid token but user record no longer exists in DB.",
-        );
-        return res
-          .status(401)
-          .json({ message: "Identity rejected. Account non-existent." });
+      // Verify user exists in MySQL/Postgres
+      const user = await User.findByPk(decoded.id);
+      if (!user) {
+        return res.status(401).json({ message: "User no longer exists." });
       }
 
-      // Attach the live database record to the request object
-      req.user = userRecord;
-
-      return next(); // Proceed to the next step
+      req.user = user; // Attach the database user object
+      return next(); // Success
     } catch (error) {
-      console.error("❌ Auth Error:", error.message);
       return res
         .status(401)
-        .json({ message: "Session expired or corrupted. Please re-login." });
+        .json({ message: "Session expired. Please log in again." });
     }
   }
 
-  // If no token was provided at all
   if (!token) {
     return res
       .status(401)
-      .json({ message: "Access Denied. Identity token missing." });
+      .json({ message: "Access denied. No token provided." });
   }
 };
 
-/**
- * 2. LECTURER GATEKEEPER:
- * Intercepts requests that require Teacher or Admin clearance.
- */
 const isTeacher = (req, res, next) => {
+  // Check if req.user was set by 'protect'
   if (req.user && (req.user.role === "teacher" || req.user.role === "admin")) {
     return next();
   }
-
   console.log(
-    `🚫 Permission Denied: ${req.user?.username} attempted Lecturer access.`,
+    `🚫 Permission Denied: ${req.user?.username || "Unknown"} attempted Lecturer access.`,
   );
-  return res.status(403).json({
-    message: "Authorization failed. Lecturer level clearance required.",
-  });
+  return res
+    .status(403)
+    .json({ message: "Insufficient permissions. Lecturer level required." });
 };
 
-/**
- * 3. ROOT ADMINISTRATOR GATEKEEPER:
- * Intercepts requests that require absolute system authority.
- */
 const isAdmin = (req, res, next) => {
   if (req.user && req.user.role === "admin") {
     return next();
   }
-
-  console.log(
-    `🚫 Security Alert: ${req.user?.username} attempted Administrative access.`,
-  );
-  return res.status(403).json({
-    message: "Identity Rejected. Root Administrator clearance required.",
-  });
+  return res
+    .status(403)
+    .json({ message: "Identity Rejected. Admin level required." });
 };
 
 module.exports = { protect, isTeacher, isAdmin };
