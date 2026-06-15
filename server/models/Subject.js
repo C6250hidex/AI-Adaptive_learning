@@ -7,46 +7,50 @@ module.exports = (sequelize, DataTypes) => {
         autoIncrement: true,
         primaryKey: true,
       },
-      // The academic name (e.g., "Computer Science 101")
+      // The officially indexed module name (e.g., "Data Structures")
       name: {
         type: DataTypes.STRING,
         unique: true,
         allowNull: false,
         validate: {
           notEmpty: true,
-          len: [3, 50], // Ensures subject names aren't too short or long
+          len: [3, 50],
+        },
+        set(val) {
+          // Senior Touch: Automatically trim and format subject names
+          this.setDataValue("name", val.trim());
         },
       },
-      // Course overview for the student search page
+      // High-level overview displayed in the Course Discovery UI
       description: {
         type: DataTypes.TEXT,
         allowNull: true,
       },
-      // Foreign Key: Linking the subject to a specific Lecturer
+      // The Lecturer assigned to oversee this specific track
       teacherId: {
         type: DataTypes.INTEGER,
-        allowNull: true, // Can be null if the module is system-wide
+        allowNull: true,
       },
     },
     {
-      // Indexes make the "Subject Search" feature lightning fast
+      // PROFESSIONAL SYSTEM OPTIMIZATION:
+      // Indexes ensure the "Course Search" bar remains responsive
       indexes: [{ fields: ["name"] }, { fields: ["teacherId"] }],
+      timestamps: true, // Tracks when new modules are introduced to the system
     },
   );
 
   /**
    * DATABASE RELATIONSHIPS:
-   * Each subject is overseen by one Teacher (Lecturer).
+   * Each subject module is linked to exactly one Faculty Member.
    */
   Subject.associate = (models) => {
+    // Allows us to fetch a subject and see who the Lecturer is
     Subject.belongsTo(models.User, {
       foreignKey: "teacherId",
-      as: "lecturer",
-      onDelete: "SET NULL", // If the lecturer leaves, the course remains in the system
+      as: "lecturer", // Human-readable alias for API responses
+      onDelete: "SET NULL", // Keep the course active even if the teacher leaves
     });
-
-    // Potential for future expansion:
-    // Subject.hasMany(models.Question, { foreignKey: 'subjectId' });
   };
 
   return Subject;

@@ -2,44 +2,57 @@ const { Question, User, sequelize } = require("../models");
 const { analyzeDifficulty } = require("../utils/aiEngine");
 const { Op } = require("sequelize");
 
-// 1. CREATE: Adding a single question with AI NLP Analysis
+/**
+ * 1. CREATE: Single question entry with AI NLP Analysis
+ */
 exports.addQuestion = async (req, res) => {
   try {
-    const aiResult = analyzeDifficulty(req.body.questionText);
+    const { questionText, subject } = req.body;
 
-    // commit to MySQL
+    if (!questionText || !subject) {
+      return res
+        .status(400)
+        .json({ message: "Context and Subject are required." });
+    }
+
+    // AI HEURISTICS: Get difficulty and reasoning from the NLP engine
+    const aiResult = analyzeDifficulty(questionText);
+
+    // Commit to PostgreSQL
     const newQuestion = await Question.create({
       ...req.body,
+      subject: subject.trim(),
       difficulty: aiResult.difficulty,
       aiScore: aiResult.score,
       reasoning: aiResult.reasoning,
-      teacherId: req.user.id, // This links the question to the logged-in user
+      teacherId: req.user.id, // Verified by protect middleware
     });
 
-    console.log("✅ Question committed to DB");
+    console.log(`✅ [DB] Question indexed: ${aiResult.difficulty} level.`);
     res.status(201).json(newQuestion);
   } catch (error) {
-    console.error("SAVE ERROR:", error);
-    res.status(500).json({ error: error.message });
+    console.error("❌ [SAVE ERROR]:", error.message);
+    res.status(500).json({ error: "Database rejected the entry." });
   }
 };
 
-// 2. READ: Advanced Filtering for the Question Inventory
+/**
+ * 2. READ: Advanced Filtering & Pagination (Optimized for Postgres)
+ */
 exports.getAllQuestions = async (req, res) => {
   try {
-    // Extract pagination parameters with defaults
     const { page = 1, limit = 10, subject, difficulty, search } = req.query;
-    const offset = (page - 1) * limit;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
 
-    // Build filtering logic
     let whereClause = {};
     if (subject) whereClause.subject = subject;
     if (difficulty) whereClause.difficulty = difficulty;
+
+    // Postgres Specific: Use iLike for case-insensitive search
     if (search) {
-      whereClause.questionText = { [Op.like]: `%${search}%` };
+      whereClause.questionText = { [Op.iLike]: `%${search}%` };
     }
 
-    // findAndCountAll returns { count, rows }
     const { count, rows } = await Question.findAndCountAll({
       where: whereClause,
       order: [["createdAt", "DESC"]],
@@ -52,87 +65,97 @@ exports.getAllQuestions = async (req, res) => {
       totalItems: count,
       totalPages: Math.ceil(count / limit),
       currentPage: parseInt(page),
-      limit: parseInt(limit),
     });
   } catch (error) {
-    console.error("QUERY ERROR:", error);
-    res.status(500).json({ error: "Failed to query question registry." });
+    console.error("❌ [QUERY ERROR]:", error.message);
+    res.status(500).json({ error: "Registry query failed." });
   }
 };
-// 3. DELETE: Removing content from the bank
+
+/**
+ * 3. DELETE: Permanent record removal with ownership guard
+ */
 exports.deleteQuestion = async (req, res) => {
   try {
     const { id } = req.params;
-
-    // Safety check: Only the owner or an admin can delete
     const question = await Question.findByPk(id);
+
     if (!question)
       return res.status(404).json({ message: "Record not found." });
 
+    // Security Guard: Admins can delete anything, Teachers only their own
     if (req.user.role !== "admin" && question.teacherId !== req.user.id) {
       return res
         .status(403)
-        .json({ message: "Unauthorized deletion attempt." });
+        .json({ message: "Authorization rejected: Ownership required." });
     }
 
     await question.destroy();
-    res.json({ message: "Question successfully purged from registry." });
+    res.json({ message: "Record purged from database." });
   } catch (error) {
-    res.status(500).json({ error: "Purge cycle failed." });
+    res.status(500).json({ error: "Deletion cycle failed." });
   }
 };
-// 4. PREDICT ONLY: Real-time UI feedback for Lecturers
+
+/**
+ * 4. PREDICT ONLY: Real-time UI feedback loop
+ */
 exports.predictOnly = (req, res) => {
   try {
     const { questionText } = req.body;
 
-    if (!questionText || questionText.length < 5) {
+    if (!questionText || questionText.length < 10) {
       return res
         .status(400)
-        .json({ message: "Insufficient text for AI analysis" });
+        .json({ message: "Insufficient text for heuristic analysis." });
     }
 
-    // Call the AI Engine - it now returns EVERYTHING including reasoning
     const result = analyzeDifficulty(questionText);
 
-    // Return exactly what the frontend expects
     res.json({
       prediction: result.difficulty,
       score: result.score,
       reasoning: result.reasoning,
     });
   } catch (error) {
-    console.error("PREDICT ERROR:", error);
-    res.status(500).json({ error: "AI Engine processing failure" });
+    res.status(500).json({ error: "AI node connectivity issue." });
   }
 };
 
-// 5. BULK UPLOAD: Professional data entry (Optional feature)
+/**
+ * 5. BULK UPLOAD: Optimized Batch indexing
+ */
 exports.bulkUpload = async (req, res) => {
   try {
     const { questions } = req.body;
+    if (!Array.isArray(questions))
+      return res.status(400).json({ message: "Invalid array format." });
 
-    // Process every question through the AI Engine in parallel
-    const preparedQuestions = questions.map((q) => {
+    const prepared = questions.map((q) => {
       const ai = analyzeDifficulty(q.questionText);
       return {
         ...q,
         difficulty: ai.difficulty,
         aiScore: ai.score,
-        teacherId: req.user.id, // Track ownership
+        reasoning: ai.reasoning,
+        teacherId: req.user.id,
       };
     });
 
-    await Question.bulkCreate(preparedQuestions);
-
-    res.status(201).json({
-      message: `AI Engine successfully indexed ${questions.length} questions into MySQL.`,
-    });
+    await Question.bulkCreate(prepared);
+    res
+      .status(201)
+      .json({ message: `Successfully indexed ${questions.length} entries.` });
   } catch (error) {
-    res.status(500).json({ error: "Bulk indexing failed. Check data format." });
+    res
+      .status(500)
+      .json({ error: "Bulk indexing failed. Verify column mapping." });
   }
 };
-// Get only unique subject names and counts (Safe for students)
+
+/**
+ * 6. SUBJECT LIST: Category mapping for Course Discovery (Postgres Fix)
+ */
 exports.getSubjectList = async (req, res) => {
   try {
     const subjects = await Question.findAll({
@@ -140,15 +163,12 @@ exports.getSubjectList = async (req, res) => {
         "subject",
         [sequelize.fn("COUNT", sequelize.col("id")), "count"],
       ],
-      group: ["subject"],
+      group: ["subject"], // Required for Postgres aggregations
     });
-    if (!subjects) return res.json([]);
-    res.json(subjects);
+
+    res.json(subjects || []);
   } catch (error) {
-    console.error("SUBJECT LIST ERROR:", error);
-    res.status(500).json({
-      message: "Failed to fetch subject registry",
-      error: error.message,
-    });
+    console.error("❌ [SUBJECT LIST ERROR]:", error.message);
+    res.status(500).json({ message: "Failed to fetch registry metadata." });
   }
 };

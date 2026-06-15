@@ -46,9 +46,6 @@ const Leaderboard = () => {
             }`}
           >
             <div className="flex items-center gap-4">
-              {/* BUG FIX 1 & 2: Split medal vs rank-number into distinct layouts.
-                  Medal icon gets the color class directly so SVG currentColor
-                  resolves correctly. Rank number gets its own sizing/alignment. */}
               <div className="w-6 flex items-center justify-center">
                 {index < 3 ? (
                   <Medal size={24} className={getMedalColor(index)} />
@@ -60,10 +57,10 @@ const Leaderboard = () => {
               </div>
               <div>
                 <p className="font-bold text-slate-800 leading-none">
-                  {entry.user?.username}
+                  {entry.user?.username || "Anonymous Student"}
                 </p>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
-                  {entry.dataValues?.examscount || entry.examscount || 0} Tracks
+                  {entry.examscount || entry.dataValues?.examscount || 0} Tracks
                   Completed
                 </p>
               </div>
@@ -71,9 +68,9 @@ const Leaderboard = () => {
             <div className="text-right">
               <p className="text-sm font-black text-indigo-600">
                 {parseFloat(
-                  entry.dataValues?.avgaccuracy || entry.avgaccuracy || 0,
+                  entry.avgaccuracy || entry.dataValues?.avgaccuracy || 0,
                 ).toFixed(1)}
-                %
+                % %
               </p>
               <p className="text-[9px] font-bold text-slate-400 uppercase">
                 Avg Acc

@@ -7,66 +7,79 @@ module.exports = (sequelize, DataTypes) => {
         autoIncrement: true,
         primaryKey: true,
       },
+      // Identity Label
       username: {
         type: DataTypes.STRING,
         unique: true,
         allowNull: false,
         validate: {
-          len: [3, 100], // Professional constraint
+          len: [3, 100],
         },
       },
+      // Security Credential: Unique Identity
       email: {
         type: DataTypes.STRING,
         unique: true,
         allowNull: false,
         validate: { isEmail: true },
       },
+      // Hashed Key
       password: {
         type: DataTypes.STRING,
         allowNull: false,
       },
-      // The 3-Tier Access System
+      // ACCESS CONTROL: The 3-Tier Hierarchy
       role: {
         type: DataTypes.ENUM("admin", "teacher", "student"),
         defaultValue: "student",
       },
-      // AI Memory: System remembers student performance across sessions
+      // AI COGNITIVE MEMORY: Remembers the student's mastery level
       currentLevel: {
         type: DataTypes.ENUM("Easy", "Medium", "Hard"),
         defaultValue: "Medium",
       },
-      // Gamification/Progress Metric (Optional but professional)
+      // PERFORMANCE REWARD: Gamification metric
       points: {
         type: DataTypes.INTEGER,
         defaultValue: 0,
       },
     },
     {
-      // Professional auditing: Tracks when accounts are created/updated
-      timestamps: true,
-      indexes: [{ fields: ["email"] }, { fields: ["role"] }],
+      // PROFESSIONAL AUDITING & PERFORMANCE
+      timestamps: true, // Tracks 'createdAt' for 'Member Since' stats
+      indexes: [
+        { fields: ["email"] }, // Speeds up the login process
+        { fields: ["role"] }, // Speeds up the Admin User Management filters
+      ],
+      hooks: {
+        // Senior Touch: Ensure data is always sanitized at the DB level
+        beforeCreate: (user) => {
+          user.email = user.email.toLowerCase().trim();
+          user.username = user.username.trim();
+        },
+      },
     },
   );
 
   /**
    * DATABASE ASSOCIATIONS:
-   * Defines how Users interact with other tables in MySQL.
+   * Programmatic mapping of the 3-Tier ecosystem logic.
    */
   User.associate = (models) => {
-    // 1. STUDENT RELATIONSHIP: A student has many exam results
+    // 1. STUDENT RELATIONSHIP: Links identity to academic performance logs
     User.hasMany(models.ExamResult, {
       foreignKey: "userId",
       as: "results",
-      onDelete: "CASCADE",
+      onDelete: "CASCADE", // Clean database: remove results if student is purged
     });
 
-    // 2. TEACHER RELATIONSHIP: A teacher can manage multiple subjects
+    // 2. TEACHER RELATIONSHIP: Maps a Lecturer to their academic track
     User.hasMany(models.Subject, {
       foreignKey: "teacherId",
       as: "managedSubjects",
     });
 
-    // 3. CONTENT OWNERSHIP: A teacher owns the questions they upload
+    // 3. CONTENT OWNERSHIP: Traceability of AI-generated content
     User.hasMany(models.Question, {
       foreignKey: "teacherId",
       as: "contributedQuestions",

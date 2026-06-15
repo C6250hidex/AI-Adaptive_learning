@@ -1,9 +1,9 @@
-const { User, Question, ExamResult, sequelize } = require("../models");
-const { Op } = require("sequelize");
+const { User, Question, ExamResult, sequelize, Subject } = require("../models");
+const { Op, Sequelize } = require("sequelize");
 
 exports.getGlobalStats = async (req, res) => {
   try {
-    // 1. High-Level KPI Totals (Parallel Execution for speed)
+    // 1. High-Level KPI Totals (Parallel Execution)
     const [totalStudents, totalQuestions, totalExamsTaken, globalAvgAccuracy] =
       await Promise.all([
         User.count({ where: { role: "student" } }),
@@ -14,17 +14,17 @@ exports.getGlobalStats = async (req, res) => {
         }),
       ]);
 
-    // 2. Performance by Subject (Comparing AI Difficulty vs Student Performance)
+    // 2. Performance by Subject (Postgres requires grouping by 'subject')
     const subjectStats = await Question.findAll({
       attributes: [
         "subject",
         [sequelize.fn("COUNT", sequelize.col("id")), "count"],
-        [sequelize.fn("AVG", sequelize.col("aiScore")), "avgDifficulty"],
+        [sequelize.fn("AVG", sequelize.col("aiScore")), "avgdifficulty"], // lowercase alias for Postgres
       ],
       group: ["subject"],
     });
 
-    // 3. AI Difficulty Distribution (Visualizing the "Brain's" output)
+    // 3. AI Difficulty Distribution
     const difficultyDist = await Question.findAll({
       attributes: [
         "difficulty",
@@ -33,23 +33,22 @@ exports.getGlobalStats = async (req, res) => {
       group: ["difficulty"],
     });
 
-    // 4. Learning Trends (Predictive Progression over the last 7 entries)
+    // 4. Learning Trends (Postgres requires identical selection and grouping for DATE)
     const trends = await ExamResult.findAll({
       attributes: [
         [sequelize.fn("DATE", sequelize.col("createdAt")), "date"],
-        [sequelize.fn("AVG", sequelize.col("accuracy")), "avgAccuracy"],
+        [sequelize.fn("AVG", sequelize.col("accuracy")), "avgaccuracy"],
       ],
       group: [sequelize.fn("DATE", sequelize.col("createdAt"))],
       order: [[sequelize.fn("DATE", sequelize.col("createdAt")), "ASC"]],
       limit: 7,
     });
 
-    // 5. NEW: Real-World Insight - Struggling Subjects
-    // We mine the ExamResult table to find where students score the lowest
+    // 5. Struggling Subjects (Postgres: Sort by the aggregate function itself)
     const strugglingSubjects = await ExamResult.findAll({
       attributes: [
         "subject",
-        [sequelize.fn("AVG", sequelize.col("accuracy")), "avgScore"],
+        [sequelize.fn("AVG", sequelize.col("accuracy")), "avgscore"],
         [sequelize.fn("COUNT", sequelize.col("id")), "attempts"],
       ],
       group: ["subject"],
@@ -57,19 +56,22 @@ exports.getGlobalStats = async (req, res) => {
       limit: 3,
     });
 
-    // 6. NEW: Audit Log - Recent Activity with User Identities
-    // This allows the Admin to see WHO is doing WHAT in real-time
+    // 6. Audit Log: Recent Activity with Joins
     const recentActivity = await ExamResult.findAll({
       limit: 5,
       order: [["createdAt", "DESC"]],
       include: [
         {
           model: User,
-          as: "user", // Ensure this matches your ExamResult model association
+          as: "user", // Matches ExamResult.associate as: 'user'
           attributes: ["username", "email"],
         },
       ],
     });
+
+    // 7. Accuracy Calculation Logic (Handling Nulls for new DBs)
+    const rawAvg = globalAvgAccuracy[0]?.get("avg");
+    const processedAvg = rawAvg ? parseFloat(rawAvg).toFixed(1) : 0;
 
     // Return the professional data package
     res.json({
@@ -77,9 +79,7 @@ exports.getGlobalStats = async (req, res) => {
         totalStudents,
         totalQuestions,
         totalExamsTaken,
-        avgGlobalAccuracy: globalAvgAccuracy[0].dataValues.avg
-          ? parseFloat(globalAvgAccuracy[0].dataValues.avg).toFixed(1)
-          : 0,
+        avgGlobalAccuracy: processedAvg,
       },
       subjectStats,
       difficultyDist,
@@ -88,17 +88,19 @@ exports.getGlobalStats = async (req, res) => {
       recentActivity,
     });
   } catch (error) {
-    console.error("DATA MINING ERROR:", error);
+    console.error("📊 DATA MINING ERROR:", error.message);
     res.status(500).json({
       error: "Failed to generate intelligent insights",
       details: error.message,
     });
   }
 };
+
+// 8. USER MANAGEMENT: Fetch User Registry
 exports.getAllUsers = async (req, res) => {
   try {
     const users = await User.findAll({
-      attributes: { exclude: ["password"] }, // Security: Never leak hashes
+      attributes: { exclude: ["password"] },
       order: [["createdAt", "DESC"]],
     });
     res.json(users);
@@ -107,20 +109,23 @@ exports.getAllUsers = async (req, res) => {
   }
 };
 
-// Update user roles (The Promote/Demote logic)
+// 9. PERMISSION CONTROL: Promote/Demote Users
 exports.updateUserRole = async (req, res) => {
   try {
     const { id } = req.params;
     const { role } = req.body;
 
-    // Prevent demoting the last admin (Professional Safety)
+    // Professional Security: Prevent "Last Admin" deletion
     if (role !== "admin") {
-      const adminCount = await User.count({ where: { role: "admin" } });
-      const userToUpdate = await User.findByPk(id);
-      if (userToUpdate.role === "admin" && adminCount <= 1) {
-        return res
-          .status(400)
-          .json({ message: "System requires at least one Root Admin." });
+      const currentAdmin = await User.findByPk(id);
+      if (currentAdmin && currentAdmin.role === "admin") {
+        const adminCount = await User.count({ where: { role: "admin" } });
+        if (adminCount <= 1) {
+          return res.status(400).json({
+            message:
+              "Action rejected: System requires at least one root administrator.",
+          });
+        }
       }
     }
 
@@ -131,21 +136,50 @@ exports.updateUserRole = async (req, res) => {
   }
 };
 
-// Delete user account
+// 10. ACCOUNT PURGE: Delete User
 exports.deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Safety: Admin cannot delete themselves
+    // Safety: Admin cannot delete themselves via the UI
     if (parseInt(id) === req.user.id) {
-      return res
-        .status(400)
-        .json({ message: "Self-deletion is prohibited via Dashboard." });
+      return res.status(400).json({
+        message: "Self-deletion is prohibited to prevent system lockout.",
+      });
     }
 
     await User.destroy({ where: { id } });
-    res.json({ message: "User purged from registry." });
+    res.json({ message: "Identity successfully purged from registry." });
   } catch (error) {
     res.status(500).json({ error: "Identity deletion failed." });
+  }
+};
+exports.createSubject = async (req, res) => {
+  try {
+    const { name, description, teacherId } = req.body;
+    const newSubject = await Subject.create({
+      name: name.trim(),
+      description,
+      teacherId: teacherId || null,
+    });
+    res
+      .status(201)
+      .json({
+        message: "Learning module successfully indexed.",
+        data: newSubject,
+      });
+  } catch (error) {
+    res.status(500).json({ error: "Duplicate entry or database rejection." });
+  }
+};
+
+// 6. DELETE SUBJECT: Removes a module
+exports.deleteSubject = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await Subject.destroy({ where: { id } });
+    res.json({ message: "Module purged from catalog." });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to remove subject." });
   }
 };

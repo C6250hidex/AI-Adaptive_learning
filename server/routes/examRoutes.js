@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const examController = require("../controllers/examController");
-const { protect, isTeacher, isAdmin } = require("../middleware/authMiddleware");
+const { protect, isTeacher } = require("../middleware/authMiddleware");
 
 router.post("/next-question", protect, examController.getAdaptiveQuestion);
 

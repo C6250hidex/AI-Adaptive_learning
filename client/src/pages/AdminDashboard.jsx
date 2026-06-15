@@ -46,8 +46,8 @@ const AdminDashboard = () => {
         `/questions?page=${page}&limit=10&subject=${filterDifficulty !== "All" ? filterDifficulty : ""}&search=${searchTerm}`,
       );
 
-      setQuestions(data.questions); // Use the paginated array
-      setTotalPages(data.totalPages);
+      setQuestions(data.questions || []);
+      setTotalPages(data.totalPages || 1);
     } catch (err) {
       toast.error(err.message || "Database connection failed");
     } finally {
