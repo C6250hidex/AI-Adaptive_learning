@@ -23,7 +23,7 @@ exports.getAdaptiveQuestion = async (req, res) => {
 
     let question = await Question.findOne({
       where: { ...whereClause, difficulty: targetDifficulty },
-      order: [Sequelize.literal("RAND()")],
+      order: [Sequelize.literal("RANDOM()")],
     });
 
     if (!question) {

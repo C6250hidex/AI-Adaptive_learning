@@ -63,13 +63,17 @@ const Leaderboard = () => {
                   {entry.user?.username}
                 </p>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
-                  {entry.examsCount} Tracks Completed
+                  {entry.dataValues?.examscount || entry.examscount || 0} Tracks
+                  Completed
                 </p>
               </div>
             </div>
             <div className="text-right">
               <p className="text-sm font-black text-indigo-600">
-                {parseFloat(entry.avgAccuracy).toFixed(1)}%
+                {parseFloat(
+                  entry.dataValues?.avgaccuracy || entry.avgaccuracy || 0,
+                ).toFixed(1)}
+                %
               </p>
               <p className="text-[9px] font-bold text-slate-400 uppercase">
                 Avg Acc
