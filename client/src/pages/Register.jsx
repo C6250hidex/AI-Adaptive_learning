@@ -26,7 +26,7 @@ const Register = () => {
     e.preventDefault();
     setLoading(true);
 
-    // 1. Prepare data
+    // 1. Sanitize Data
     const payload = {
       username: formData.username.trim(),
       email: formData.email.toLowerCase().trim(),
@@ -34,21 +34,28 @@ const Register = () => {
       role: formData.role.toLowerCase(),
     };
 
-    // 2. Pass the PENDING promise to toast.promise (NO AWAIT HERE)
+    console.log(
+      "🚀 DISPATCHING POST REQUEST TO:",
+      API.defaults.baseURL + "/auth/register",
+    );
+
+    // 2. Create the promise WITHOUT 'await'
     const registerPromise = API.post("/auth/register", payload);
 
+    // 3. Trigger the toast
     toast.promise(registerPromise, {
-      loading: "Syncing with Render Cloud Database...",
+      loading: "Syncing academic profile with database...",
       success: (res) => {
         setLoading(false);
         setTimeout(() => navigate("/login"), 2000);
-        return "Success! Academic profile indexed.";
+        return "Registration successful! Redirecting...";
       },
       error: (err) => {
         setLoading(false);
-        // This will now show the REAL error from Postgres (e.g. 'Email already in use')
+        console.error("🔥 POST FAILED:", err.response?.data);
         return (
-          err.response?.data?.message || "Verify your connection and data."
+          err.response?.data?.message ||
+          "Registration failed. Check connection."
         );
       },
     });

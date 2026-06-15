@@ -32,6 +32,8 @@ const authLimiter = rateLimit({
 app.use(
   cors({
     origin: process.env.CLIENT_URL || "http://localhost:5173", // Only allow your frontend to connect
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   }),
 );
@@ -41,7 +43,7 @@ app.use(express.json({ limit: "10mb" })); // Increased limit for bulk question u
 // --- 2. API ROUTES ---
 
 // Apply limiter only to authentication to prevent hacking attempts
-app.use("/api/auth", authLimiter, authRoutes);
+app.use("/api/auth", authRoutes);
 
 app.use("/api/questions", questionRoutes);
 app.use("/api/exams", examRoutes);
